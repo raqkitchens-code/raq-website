@@ -1,0 +1,101 @@
+name: Kitchen Planner snapshot check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "plan/**"
+      - "scripts/check-planner-browser.mjs"
+      - "scripts/prepare-planner.mjs"
+      - ".github/workflows/planner-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  planner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out website
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check whether source access is configured
+        id: source-access
+        shell: bash
+        env:
+          PLANNER_READ_TOKEN: ${{ secrets.PLANNER_READ_TOKEN }}
+        run: |
+          if [[ -n "$PLANNER_READ_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "PLANNER_READ_TOKEN is absent; using the committed planner snapshot. No private checkout was attempted."
+          fi
+
+      - name: Check out Kitchen Planner main (read only)
+        if: steps.source-access.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: raqkitchens-code/KITCHEN-PLANNER
+          ref: main
+          path: .planner-source
+          token: ${{ secrets.PLANNER_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install temporary browser checker
+        run: |
+          npm install --prefix "$RUNNER_TEMP/planner-browser" --no-audit --no-fund playwright
+          "$RUNNER_TEMP/planner-browser/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Build the current public Self-mode source
+        if: steps.source-access.outputs.available == 'true'
+        working-directory: .planner-source
+        env:
+          MASTER_DATA_PATH: ""
+        run: npm ci && npm run build
+
+      - name: Prepare a candidate snapshot from current source
+        if: steps.source-access.outputs.available == 'true'
+        id: candidate
+        shell: bash
+        run: |
+          sha="$(git -C .planner-source rev-parse --short HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          node scripts/prepare-planner.mjs \
+            --input .planner-source/dist/kitchen-planner.html \
+            --output "$RUNNER_TEMP/planner-candidate/index.html" \
+            --metadata "$RUNNER_TEMP/planner-candidate/version.json" \
+            --sha "$sha"
+
+      - name: Check the committed Self-mode snapshot at 390px
+        env:
+          PLAYWRIGHT_ENTRY: ${{ runner.temp }}/planner-browser/node_modules/playwright/index.mjs
+        run: node scripts/check-planner-browser.mjs plan/index.html plan/version.json
+
+      - name: Check the current source build at 390px
+        if: steps.source-access.outputs.available == 'true'
+        env:
+          PLAYWRIGHT_ENTRY: ${{ runner.temp }}/planner-browser/node_modules/playwright/index.mjs
+        run: node scripts/check-planner-browser.mjs "$RUNNER_TEMP/planner-candidate/index.html" "$RUNNER_TEMP/planner-candidate/version.json"
+
+      - name: Check website links, assets, and content
+        run: node scripts/check-site.mjs
+
+      - name: Report if the committed snapshot is stale
+        if: steps.source-access.outputs.available == 'true'
+        shell: bash
+        run: |
+          deployed_sha="$(node -p "require('./plan/version.json').sourceSha")"
+          fresh_sha="${{ steps.candidate.outputs.sha }}"
+          if ! cmp -s plan/index.html "$RUNNER_TEMP/planner-candidate/index.html" || ! cmp -s plan/version.json "$RUNNER_TEMP/planner-candidate/version.json"; then
+            echo "::error title=Planner snapshot is stale::Fresh Kitchen Planner main build is $fresh_sha; deployed website snapshot remains $deployed_sha. Update plan/index.html and plan/version.json through a website PR."
+            exit 1
+          fi
