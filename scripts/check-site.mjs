@@ -24,6 +24,12 @@ for (const [label, condition] of [
   ["Planner snapshot declares Self mode", planner.includes('name="planner-mode" content="self"')],
   ["Planner footer SHA matches metadata", /^[a-f0-9]{7,40}$/i.test(plannerVersion.sourceSha) && planner.includes(`data-source-sha="${plannerVersion.sourceSha}"`)],
   ["No contact form storage or analytics", !/\b(localStorage|sessionStorage|analytics|gtag\s*\()/.test(`${html}\n${js}`)],
+  ["Visit form sends nothing from the page (no fetch, beacon or XHR)", !/\b(fetch\s*\(|sendBeacon|XMLHttpRequest|WebSocket)/.test(js)],
+  ["Main phone number (DEC-43) on the page", html.includes('href="tel:+201055585530"')],
+  ["Visit request goes to the main WhatsApp number (DEC-43)", js.includes('WHATSAPP_NUMBER = "201055585530"') && js.includes("https://wa.me/")],
+  ["Visit form asks for name and service", /id="visit-form"/.test(html) && /name="name"/.test(html) && /name="service"/.test(html)],
+  ["Six journey steps (DEC-48)", (html.match(/<span class="journey-number">/g) ?? []).length === 6],
+  ["Secondary number not used as the main contact", !html.includes("01080061114")],
 ]) if (!condition) failures.push(label);
 
 for (const [, rawPath] of html.matchAll(/(?:src|href)="(assets\/[^"#?]+)"/g)) {

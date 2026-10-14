@@ -15,3 +15,11 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/check-site.mjs
+      - name: Install temporary browser checker
+        run: |
+          npm install --prefix "$RUNNER_TEMP/site-browser" --no-audit --no-fund playwright
+          "$RUNNER_TEMP/site-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Browser check at 390px (menu, visit form, WhatsApp message)
+        env:
+          PLAYWRIGHT_ENTRY: ${{ runner.temp }}/site-browser/node_modules/playwright/index.mjs
+        run: node scripts/check-site-browser.mjs
