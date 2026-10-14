@@ -15,7 +15,7 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   let opened = null;
-  await page.route("https://wa.me/**", (route) => { opened = route.request().url(); return route.fulfill({ status: 204, body: "" }); });
+  await page.route("https://wa.me/**", (route) => { opened = route.request().url(); return route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>wa</title>" }); });
   await page.goto(`${home}?src=showroom`, { waitUntil: "load" });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390, "page must fit 390px");
 
@@ -30,8 +30,9 @@ try {
   await page.fill("#visit-name", "منى");
   await page.selectOption("#visit-service", "دريسينج");
   await page.fill("#visit-area", "بورفؤاد");
-  await Promise.all([page.waitForRequest("https://wa.me/**"), page.click('#visit-form button[type="submit"]')]);
-  const url = new URL(opened);
+  // the click starts a navigation to WhatsApp; do not wait on it (newer Playwright waits for scheduled navigations)
+  const [request] = await Promise.all([page.waitForRequest("https://wa.me/**"), page.click('#visit-form button[type="submit"]', { noWaitAfter: true })]);
+  const url = new URL(request.url());
   assert.equal(url.pathname, "/201055585530", "the main number (DEC-43)");
   const text = url.searchParams.get("text");
   for (const part of ["منى", "دريسينج", "بورفؤاد", "شاشة المعرض"]) assert.ok(text.includes(part), `message has ${part}`);
