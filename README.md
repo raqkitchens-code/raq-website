@@ -8,7 +8,13 @@
 
 ```sh
 node scripts/check-site.mjs
+node scripts/check-site-browser.mjs   # يحتاج Playwright: يفحص الصفحة بعرض 390px ونموذج طلب المعاينة
 ```
+
+## طلب المعاينة
+
+قسم «احجز معاينتك» يجمع الاسم والخدمة والمنطقة، ويفتح رسالة واتساب على الرقم الأساسي 01055585530 (DEC-43). ولو الزائر جه من QR، الرسالة بتقول جه منين (`?src=showroom` أو `flyer` أو `card`).
+الموقع نفسه ما بيحفظش أي بيانات وما بيبعتش حاجة لأي سيرفر (`connect-src 'none'`). ولما استقبال العملاء في RAQ OS يتنشر (`supabase/functions/lead-intake` في raq-os، محتاج `TURNSTILE_SECRET` وموافقة خالد)، النموذج ده هو اللي يتوصل بيه.
 
 مسار `/plan` يستضيف مخطط المطابخ في وضع الاستخدام الذاتي (Self). نسخة الموقع الحالية مبنية من `raqkitchens-code/KITCHEN-PLANNER` عند SHA المسجل في `plan/version.json`. ومسارات `/qr/showroom` و`/qr/flyer` و`/qr/card` تعيد الزائر إلى الموقع مع قيمة `src` فقط.
 
